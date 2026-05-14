@@ -205,6 +205,9 @@ GitHub Actions workflows live in `.github/workflows/`:
 - `GCP_REGION` (defaults to `us-central1`).
 - `FIREBASE_WEB_APP_ID` — only needed if the project has more than one
   registered Web app; otherwise `apps:sdkconfig WEB` picks the lone one.
+- `FIREBASE_STORAGE_BUCKET` — defaults to `<project>.firebasestorage.app`
+  (the format new Firebase projects use post-Oct 2024). Set explicitly if
+  your project uses the older `<project>.appspot.com` bucket.
 
 The frontend's `VITE_FIREBASE_*` values are **not** GitHub secrets/vars —
 they're fetched from Firebase at deploy time. The Firebase web config is
