@@ -1,6 +1,8 @@
 from pathlib import Path
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, status
+from google.cloud.firestore import DocumentSnapshot
 from pydantic import BaseModel
 
 from ..auth import CurrentUserDep
@@ -13,16 +15,16 @@ router = APIRouter(prefix="/api/projects", tags=["compile"])
 
 
 class CompileOut(BaseModel):
-    pdfUrl: str  # noqa: N815
+    pdfUrl: str
     log: str
 
 
 @router.post("/{project_id}/compile", response_model=CompileOut)
 async def compile_project(project_id: str, user: CurrentUserDep) -> CompileOut:
-    snap = db().collection("projects").document(project_id).get()
+    snap = cast(DocumentSnapshot, db().collection("projects").document(project_id).get())
     if not snap.exists:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    data = snap.to_dict() or {}
+    data: dict[str, Any] = snap.to_dict() or {}
     if data.get("ownerUid") != user.uid:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 

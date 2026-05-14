@@ -17,9 +17,7 @@ def _coll() -> Any:
 
 
 def list_projects(uid: str) -> list[dict[str, Any]]:
-    query = _coll().where("ownerUid", "==", uid).order_by(
-        "updatedAt", direction="DESCENDING"
-    )
+    query = _coll().where("ownerUid", "==", uid).order_by("updatedAt", direction="DESCENDING")
     return [_serialize(doc.id, doc.to_dict()) for doc in query.stream()]
 
 

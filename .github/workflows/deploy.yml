@@ -1,7 +1,10 @@
 name: Deploy
 
+# Only fires when a PR is merged into main (or via manual dispatch). Direct
+# pushes to main do NOT trigger a deploy — protect the branch and use PRs.
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [main]
   workflow_dispatch:
 
@@ -24,8 +27,11 @@ jobs:
   backend:
     name: Backend → Cloud Run
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - id: auth
         uses: google-github-actions/auth@v2
@@ -72,8 +78,11 @@ jobs:
   rules:
     name: Firebase rules + indexes
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -94,8 +103,11 @@ jobs:
   frontend:
     name: Frontend → Firebase Hosting
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-node@v4
         with:

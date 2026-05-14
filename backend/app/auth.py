@@ -19,9 +19,10 @@ async def get_current_user(request: Request) -> CurrentUser:
     token = header.removeprefix("Bearer ").strip()
     try:
         claims = verify_id_token(token)
-    except Exception as exc:  # noqa: BLE001 — firebase_admin raises many subtypes
+    except Exception as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token") from exc
-    return CurrentUser(uid=str(claims["uid"]), email=claims.get("email"))  # type: ignore[arg-type]
+    email = claims.get("email")
+    return CurrentUser(uid=str(claims["uid"]), email=email if isinstance(email, str) else None)
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]

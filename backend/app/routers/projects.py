@@ -14,7 +14,7 @@ class CreateProjectIn(BaseModel):
 class ProjectOut(BaseModel):
     id: str
     name: str
-    updatedAt: str  # noqa: N815 — JSON-facing field
+    updatedAt: str
 
 
 class FileUpdateIn(BaseModel):

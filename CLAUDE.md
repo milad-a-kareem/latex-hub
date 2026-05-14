@@ -165,7 +165,9 @@ GitHub Actions workflows live in `.github/workflows/`:
 - `ci.yml` — runs on PRs and pushes to `main`. Two jobs: frontend
   (`npm run lint`, `typecheck`, `test`, `build`) and backend (`ruff check`,
   `ruff format --check`, `mypy`, `pytest`).
-- `deploy.yml` — runs on pushes to `main` (and `workflow_dispatch`). Three
+- `deploy.yml` — fires **only when a PR is merged into `main`** (or via
+  `workflow_dispatch`). Direct pushes to `main` do *not* trigger a deploy —
+  protect the branch and use PRs. Each job checks out `ref: main`. Three
   **parallel** jobs:
   1. `backend` — `gcloud builds submit` builds the image, then
      `gcloud run deploy` rolls it out. Cloud Run runtime SA is the **same SA**

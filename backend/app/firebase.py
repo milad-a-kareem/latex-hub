@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Any, cast
 
 import firebase_admin
 from firebase_admin import auth as fb_auth
@@ -27,13 +28,13 @@ def _app() -> firebase_admin.App:
 
 def db() -> FirestoreClient:
     _app()
-    return firestore.client()
+    return cast(FirestoreClient, firestore.client())
 
 
 def bucket() -> Bucket:
-    return storage.bucket(app=_app())
+    return cast(Bucket, storage.bucket(app=_app()))
 
 
-def verify_id_token(token: str) -> dict[str, object]:
+def verify_id_token(token: str) -> dict[str, Any]:
     _app()
-    return fb_auth.verify_id_token(token)
+    return cast(dict[str, Any], fb_auth.verify_id_token(token))
