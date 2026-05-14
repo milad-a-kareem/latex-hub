@@ -18,6 +18,10 @@ permissions:
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  # New Firebase projects (post-Oct 2024) provision the default bucket as
+  # <project>.firebasestorage.app instead of <project>.appspot.com. Override
+  # FIREBASE_STORAGE_BUCKET as a GitHub Variable if your project predates that.
+  FIREBASE_STORAGE_BUCKET: ${{ vars.FIREBASE_STORAGE_BUCKET || format('{0}.firebasestorage.app', vars.GCP_PROJECT_ID) }}
   CLOUD_RUN_SERVICE: latex-hub-api
   ARTIFACT_REPO: latex-hub
   FIREBASE_TOOLS_VERSION: '15'
@@ -29,16 +33,16 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
 
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Ensure Artifact Registry repo exists
         run: |
@@ -72,7 +76,7 @@ jobs:
             --service-account "$SA" \
             --cpu 2 --memory 2Gi --concurrency 40 --timeout 300 \
             --session-affinity \
-            --set-env-vars="^|^FIREBASE_PROJECT_ID=$GCP_PROJECT_ID|FIREBASE_STORAGE_BUCKET=$GCP_PROJECT_ID.appspot.com|CORS_ALLOW_ORIGINS=https://$GCP_PROJECT_ID.web.app,https://$GCP_PROJECT_ID.firebaseapp.com"
+            --set-env-vars="^|^FIREBASE_PROJECT_ID=$GCP_PROJECT_ID|FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET|CORS_ALLOW_ORIGINS=https://$GCP_PROJECT_ID.web.app,https://$GCP_PROJECT_ID.firebaseapp.com"
 
   # --- Firestore + Storage rules ------------------------------------------
   rules:
@@ -80,15 +84,15 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
@@ -103,19 +107,35 @@ jobs:
   frontend:
     name: Frontend → Firebase Hosting
     runs-on: ubuntu-latest
+    # Depends on backend so the Cloud Run URL is resolvable for VITE_WS_URL.
+    needs: backend
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Resolve Cloud Run service URL (for WebSocket client)
+        id: cr
+        run: |
+          URL=$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
+            --format='value(status.url)')
+          if [ -z "$URL" ]; then
+            echo "::error::Could not resolve Cloud Run service URL"
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Resolve Firebase Web SDK config from project
         id: cfg
@@ -147,10 +167,12 @@ jobs:
           VITE_FIREBASE_PROJECT_ID: ${{ steps.cfg.outputs.projectId }}
           VITE_FIREBASE_STORAGE_BUCKET: ${{ steps.cfg.outputs.storageBucket }}
           VITE_FIREBASE_APP_ID: ${{ steps.cfg.outputs.appId }}
-          # Same-origin in prod: Hosting rewrites /api and /ws to Cloud Run.
+          # REST is same-origin via Hosting rewrites; WS must hit Cloud Run
+          # directly (Hosting strips the upgrade header).
           VITE_API_URL: ''
+          VITE_WS_URL: ${{ steps.cr.outputs.url }}
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npm run build
 
       - name: Deploy Hosting

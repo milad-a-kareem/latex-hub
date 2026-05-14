@@ -33,6 +33,6 @@ spec:
             - name: FIREBASE_PROJECT_ID
               value: PROJECT_ID
             - name: FIREBASE_STORAGE_BUCKET
-              value: PROJECT_ID.appspot.com
+              value: PROJECT_ID.firebasestorage.app
             - name: CORS_ALLOW_ORIGINS
               value: https://PROJECT_ID.web.app,https://PROJECT_ID.firebaseapp.com

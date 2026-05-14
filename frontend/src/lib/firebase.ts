@@ -11,6 +11,14 @@ const config = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+if (!config.apiKey || !config.projectId) {
+  throw new Error(
+    'Firebase web SDK config is missing. The deploy workflow fetches this via ' +
+      '`firebase apps:sdkconfig WEB`; if it failed silently the project has zero or ' +
+      'multiple Web apps. Set the FIREBASE_WEB_APP_ID GitHub Variable to disambiguate.',
+  );
+}
+
 export const app: FirebaseApp = initializeApp(config);
 export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app);
