@@ -197,6 +197,7 @@ GitHub Actions workflows live in `.github/workflows/`:
   | `roles/storage.admin`             | Cloud Build staging + signed URLs     |
   | `roles/firebasehosting.admin`     | Deploy Hosting                        |
   | `roles/firebaserules.admin`       | Deploy Firestore/Storage rules        |
+  | `roles/firebasestorage.admin`     | `firebase deploy --only storage` does a `defaultBucket.get` preflight before uploading rules — `storage.admin` alone doesn't grant `firebasestorage.defaultBucket.get` |
   | `roles/datastore.indexAdmin`      | Deploy Firestore indexes              |
   | `roles/datastore.user`            | Runtime reads/writes to Firestore     |
   | `roles/iam.serviceAccountTokenCreator` (on itself) | Sign PDFs for signed URLs from Cloud Run (ADC on Cloud Run has no private key, so `generate_signed_url` delegates signing to the IAM Credentials API) |
