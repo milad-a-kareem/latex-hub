@@ -158,6 +158,65 @@ React app, add an API endpoint instead. Keep the deny-all rules intact.
 - Tailwind v4: config lives in `src/index.css` via `@theme` + CSS variables.
   There is no `tailwind.config.js`.
 
+## CI/CD
+
+GitHub Actions workflows live in `.github/workflows/`:
+
+- `ci.yml` — runs on PRs and pushes to `main`. Two jobs: frontend
+  (`npm run lint`, `typecheck`, `test`, `build`) and backend (`ruff check`,
+  `ruff format --check`, `mypy`, `pytest`).
+- `deploy.yml` — runs on pushes to `main` (and `workflow_dispatch`). Three
+  **parallel** jobs:
+  1. `backend` — `gcloud builds submit` builds the image, then
+     `gcloud run deploy` rolls it out. Cloud Run runtime SA is the **same SA**
+     that authenticates the workflow (read from `client_email` in the key).
+  2. `rules` — `firebase deploy --only firestore,storage` ships the rules and
+     the Firestore index defined in `infra/firestore.indexes.json`.
+  3. `frontend` — Resolves the Firebase Web SDK config at deploy time via
+     `firebase apps:sdkconfig WEB --json`, builds with those values, then
+     `firebase deploy --only hosting`.
+
+### Required GitHub configuration (one secret, one variable)
+
+**Secret:**
+- `GCP_SA_KEY` — JSON service-account key. Reused for *everything*: the
+  GitHub Actions deployer, the Cloud Run runtime identity, and the
+  Firebase Admin SDK on Cloud Run.
+
+  Grant this SA the following roles on the project:
+  | Role                              | Why                                   |
+  | --------------------------------- | ------------------------------------- |
+  | `roles/run.admin`                 | Deploy Cloud Run revisions            |
+  | `roles/iam.serviceAccountUser`    | Act-as itself as the runtime SA       |
+  | `roles/cloudbuild.builds.editor`  | Build the container image             |
+  | `roles/artifactregistry.writer`   | Push the image                        |
+  | `roles/storage.admin`             | Cloud Build staging + signed URLs     |
+  | `roles/firebasehosting.admin`     | Deploy Hosting                        |
+  | `roles/firebaserules.admin`       | Deploy Firestore/Storage rules        |
+  | `roles/datastore.indexAdmin`      | Deploy Firestore indexes              |
+  | `roles/datastore.user`            | Runtime reads/writes to Firestore     |
+
+**Variable:**
+- `GCP_PROJECT_ID` — Firebase/GCP project ID.
+
+**Optional variables:**
+- `GCP_REGION` (defaults to `us-central1`).
+- `FIREBASE_WEB_APP_ID` — only needed if the project has more than one
+  registered Web app; otherwise `apps:sdkconfig WEB` picks the lone one.
+
+The frontend's `VITE_FIREBASE_*` values are **not** GitHub secrets/vars —
+they're fetched from Firebase at deploy time. The Firebase web config is
+public anyway (it ends up in the JS bundle); fetching it just avoids the
+config drift you get from manually mirroring it into GitHub Variables.
+
+### Workload Identity Federation (alternative, zero secrets)
+
+`google-github-actions/auth@v2` also supports keyless OIDC via Workload
+Identity Federation. If you'd rather not store a JSON key, swap
+`credentials_json` for `workload_identity_provider` + `service_account` and
+add the SA's `iam.workloadIdentityUser` binding on the WIF pool. The rest of
+the workflow is unchanged.
+
 ## Open follow-ups
 
 These are known gaps, not bugs:
@@ -167,5 +226,3 @@ These are known gaps, not bugs:
 2. There's no file tree UI yet — the editor hard-codes `main.tex`. The
    backend already stores `files: { path: content }` per project, so a tree
    view + the existing `PUT /api/projects/{id}/files/{path}` is enough.
-3. No CI workflow yet. Wiring up `ruff`, `mypy`, `pytest`, `eslint`, `tsc`,
-   and `vitest` on PRs is the obvious first step.
