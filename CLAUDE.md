@@ -86,7 +86,9 @@ Browser  ─────────────────────┐
 - `src/features/projects/` — list/create projects via REST.
 - `src/features/editor/` — the editing surface:
   - `useYjsDoc(projectId, filePath)` opens a `WebsocketProvider` to
-    `/ws/collab` with the user's ID token and exposes a `Y.Text`.
+    `/ws/collab` with the user's ID token and exposes a `Y.Text`. The WS
+    URL comes from `VITE_WS_URL` and points **directly at Cloud Run**, not
+    via Hosting — Firebase Hosting rewrites don't proxy WebSocket upgrades.
   - `LatexEditor` binds Monaco to that `Y.Text` via `y-monaco`'s
     `MonacoBinding`. **All edits flow through Yjs**, never directly to
     Firestore — Firestore stores snapshots, Yjs owns realtime state.
@@ -197,6 +199,15 @@ GitHub Actions workflows live in `.github/workflows/`:
   | `roles/firebaserules.admin`       | Deploy Firestore/Storage rules        |
   | `roles/datastore.indexAdmin`      | Deploy Firestore indexes              |
   | `roles/datastore.user`            | Runtime reads/writes to Firestore     |
+  | `roles/iam.serviceAccountTokenCreator` (on itself) | Sign PDFs for signed URLs from Cloud Run (ADC on Cloud Run has no private key, so `generate_signed_url` delegates signing to the IAM Credentials API) |
+
+> **Project bootstrap** — these are one-time manual steps **outside the workflow**:
+> 1. Create a Firestore database in **Native mode** (not Datastore mode):
+>    `gcloud firestore databases create --location=$REGION --type=firestore-native`
+> 2. Initialize Firebase Storage in the console (creates the default
+>    `<project>.firebasestorage.app` bucket).
+> 3. Register a single Web app in the Firebase console so
+>    `apps:sdkconfig WEB --json` returns a config at deploy time.
 
 **Variable:**
 - `GCP_PROJECT_ID` — Firebase/GCP project ID.

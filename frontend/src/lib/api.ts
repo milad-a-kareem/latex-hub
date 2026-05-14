@@ -1,6 +1,11 @@
 import { auth } from './firebase';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+// Firebase Hosting cannot proxy WebSocket upgrades to Cloud Run, so the WS
+// client must talk to the Cloud Run domain directly. The deploy workflow
+// resolves the service URL via `gcloud run services describe` and injects
+// it as VITE_WS_URL. Falls back to BASE for local dev (Vite proxies /ws).
+const WS_BASE = ((import.meta.env.VITE_WS_URL as string | undefined) ?? BASE).replace(/\/$/, '');
 
 async function authHeader(): Promise<Record<string, string>> {
   const u = auth.currentUser;
@@ -21,6 +26,6 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export function wsUrl(path: string): string {
-  const base = BASE.replace(/^http/, 'ws');
+  const base = WS_BASE.replace(/^http/, 'ws');
   return `${base}${path}`;
 }

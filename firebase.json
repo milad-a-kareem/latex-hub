@@ -7,10 +7,6 @@
         "source": "/api/**",
         "run": { "serviceId": "latex-hub-api", "region": "us-central1" }
       },
-      {
-        "source": "/ws/**",
-        "run": { "serviceId": "latex-hub-api", "region": "us-central1" }
-      },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [
