@@ -1,0 +1,161 @@
+name: Deploy
+
+# Only fires when a PR is merged into main (or via manual dispatch). Direct
+# pushes to main do NOT trigger a deploy — protect the branch and use PRs.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  CLOUD_RUN_SERVICE: latex-hub-api
+  ARTIFACT_REPO: latex-hub
+  FIREBASE_TOOLS_VERSION: '15'
+
+jobs:
+  # --- Backend → Cloud Run -------------------------------------------------
+  backend:
+    name: Backend → Cloud Run
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure Artifact Registry repo exists
+        run: |
+          gcloud artifacts repositories describe "$ARTIFACT_REPO" \
+              --location "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1 \
+            || gcloud artifacts repositories create "$ARTIFACT_REPO" \
+              --repository-format=docker \
+              --location "$GCP_REGION" \
+              --project "$GCP_PROJECT_ID"
+
+      - name: Build container with Cloud Build
+        id: build
+        working-directory: backend
+        run: |
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REPO/api:${GITHUB_SHA::12}"
+          gcloud builds submit --tag "$IMAGE" --project "$GCP_PROJECT_ID"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Cloud Run
+        run: |
+          # The same SA used to authenticate this workflow is reused as the
+          # Cloud Run runtime SA. The ^|^ delimiter lets us put commas inside
+          # CORS_ALLOW_ORIGINS without confusing --set-env-vars.
+          SA="$(jq -r '.client_email' "$GOOGLE_APPLICATION_CREDENTIALS")"
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --image "${{ steps.build.outputs.image }}" \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID" \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account "$SA" \
+            --cpu 2 --memory 2Gi --concurrency 40 --timeout 300 \
+            --session-affinity \
+            --set-env-vars="^|^FIREBASE_PROJECT_ID=$GCP_PROJECT_ID|FIREBASE_STORAGE_BUCKET=$GCP_PROJECT_ID.appspot.com|CORS_ALLOW_ORIGINS=https://$GCP_PROJECT_ID.web.app,https://$GCP_PROJECT_ID.firebaseapp.com"
+
+  # --- Firestore + Storage rules ------------------------------------------
+  rules:
+    name: Firebase rules + indexes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy Firestore + Storage rules
+        run: |
+          npx -y firebase-tools@$FIREBASE_TOOLS_VERSION deploy \
+            --only firestore,storage \
+            --project "$GCP_PROJECT_ID" \
+            --non-interactive
+
+  # --- Frontend → Firebase Hosting ----------------------------------------
+  frontend:
+    name: Frontend → Firebase Hosting
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Resolve Firebase Web SDK config from project
+        id: cfg
+        env:
+          # Optional disambiguator if the project has multiple Web apps.
+          FIREBASE_WEB_APP_ID: ${{ vars.FIREBASE_WEB_APP_ID }}
+        run: |
+          set +x
+          if [ -n "$FIREBASE_WEB_APP_ID" ]; then
+            CFG=$(npx -y firebase-tools@$FIREBASE_TOOLS_VERSION apps:sdkconfig WEB \
+              "$FIREBASE_WEB_APP_ID" --project "$GCP_PROJECT_ID" --json)
+          else
+            CFG=$(npx -y firebase-tools@$FIREBASE_TOOLS_VERSION apps:sdkconfig WEB \
+              --project "$GCP_PROJECT_ID" --json)
+          fi
+          {
+            echo "apiKey=$(echo "$CFG"        | jq -r '.result.sdkConfig.apiKey')"
+            echo "authDomain=$(echo "$CFG"    | jq -r '.result.sdkConfig.authDomain')"
+            echo "projectId=$(echo "$CFG"     | jq -r '.result.sdkConfig.projectId')"
+            echo "storageBucket=$(echo "$CFG" | jq -r '.result.sdkConfig.storageBucket')"
+            echo "appId=$(echo "$CFG"         | jq -r '.result.sdkConfig.appId')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install + build
+        working-directory: frontend
+        env:
+          VITE_FIREBASE_API_KEY: ${{ steps.cfg.outputs.apiKey }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ steps.cfg.outputs.authDomain }}
+          VITE_FIREBASE_PROJECT_ID: ${{ steps.cfg.outputs.projectId }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ steps.cfg.outputs.storageBucket }}
+          VITE_FIREBASE_APP_ID: ${{ steps.cfg.outputs.appId }}
+          # Same-origin in prod: Hosting rewrites /api and /ws to Cloud Run.
+          VITE_API_URL: ''
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Deploy Hosting
+        run: |
+          npx -y firebase-tools@$FIREBASE_TOOLS_VERSION deploy \
+            --only hosting \
+            --project "$GCP_PROJECT_ID" \
+            --non-interactive

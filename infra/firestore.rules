@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// All project access goes through the backend service account, which bypasses
+// these rules. Clients should NEVER read /projects directly — they hit
+// /api/projects on the backend, which enforces ownership. Therefore we deny
+// everything from the client SDK by default.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
