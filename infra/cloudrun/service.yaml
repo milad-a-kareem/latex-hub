@@ -1,0 +1,38 @@
+# Reference Cloud Run service manifest. Apply with:
+#   gcloud run services replace infra/cloudrun/service.yaml --region us-central1
+#
+# Replace PROJECT_ID and the image tag before applying. CI typically rolls
+# this out with `gcloud run deploy` instead and only uses this file as a
+# baseline.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: latex-hub-api
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "20"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/sessionAffinity: "true"
+    spec:
+      containerConcurrency: 40
+      timeoutSeconds: 300
+      containers:
+        - image: us-central1-docker.pkg.dev/PROJECT_ID/latex-hub/api:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          env:
+            - name: FIREBASE_PROJECT_ID
+              value: PROJECT_ID
+            - name: FIREBASE_STORAGE_BUCKET
+              value: PROJECT_ID.appspot.com
+            - name: CORS_ALLOW_ORIGINS
+              value: https://PROJECT_ID.web.app,https://PROJECT_ID.firebaseapp.com

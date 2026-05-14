@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Same approach as Firestore: clients fetch PDFs via signed URLs returned by
+// the backend, so deny direct client access.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

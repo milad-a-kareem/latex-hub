@@ -1,0 +1,54 @@
+[project]
+name = "latex-hub-backend"
+version = "0.1.0"
+description = "FastAPI backend for latex-hub: collab Yjs sync, Firestore + Storage, Tectonic compile."
+requires-python = ">=3.13"
+readme = "README.md"
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.46.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.1",
+    "firebase-admin>=7.4.0",
+    "google-cloud-firestore>=2.27.0",
+    "google-cloud-storage>=3.10.1",
+    "python-multipart>=0.0.28",
+    "httpx>=0.28.1",
+    "websockets>=16.0",
+    "pycrdt>=0.13.0",
+    "pycrdt-websocket>=0.16.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PL"]
+ignore = ["PLR0913"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["pycrdt.*", "pycrdt_websocket.*", "firebase_admin.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
