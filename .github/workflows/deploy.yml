@@ -18,6 +18,10 @@ permissions:
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  # New Firebase projects (post-Oct 2024) provision the default bucket as
+  # <project>.firebasestorage.app instead of <project>.appspot.com. Override
+  # FIREBASE_STORAGE_BUCKET as a GitHub Variable if your project predates that.
+  FIREBASE_STORAGE_BUCKET: ${{ vars.FIREBASE_STORAGE_BUCKET || format('{0}.firebasestorage.app', vars.GCP_PROJECT_ID) }}
   CLOUD_RUN_SERVICE: latex-hub-api
   ARTIFACT_REPO: latex-hub
   FIREBASE_TOOLS_VERSION: '15'
@@ -72,7 +76,7 @@ jobs:
             --service-account "$SA" \
             --cpu 2 --memory 2Gi --concurrency 40 --timeout 300 \
             --session-affinity \
-            --set-env-vars="^|^FIREBASE_PROJECT_ID=$GCP_PROJECT_ID|FIREBASE_STORAGE_BUCKET=$GCP_PROJECT_ID.appspot.com|CORS_ALLOW_ORIGINS=https://$GCP_PROJECT_ID.web.app,https://$GCP_PROJECT_ID.firebaseapp.com"
+            --set-env-vars="^|^FIREBASE_PROJECT_ID=$GCP_PROJECT_ID|FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET|CORS_ALLOW_ORIGINS=https://$GCP_PROJECT_ID.web.app,https://$GCP_PROJECT_ID.firebaseapp.com"
 
   # --- Firestore + Storage rules ------------------------------------------
   rules:

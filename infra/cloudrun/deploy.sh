@@ -8,6 +8,9 @@ set -euo pipefail
 REGION="${REGION:-us-central1}"
 SERVICE="${SERVICE:-latex-hub-api}"
 REPO="${REPO:-latex-hub}"
+# Default to the new <project>.firebasestorage.app naming used by Firebase
+# projects created after Oct 2024. Override for older projects.
+BUCKET="${FIREBASE_STORAGE_BUCKET:-${PROJECT_ID}.firebasestorage.app}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/api:$(date +%Y%m%d-%H%M%S)"
 
 gcloud builds submit backend \
@@ -20,6 +23,6 @@ gcloud run deploy "${SERVICE}" \
   --project "${PROJECT_ID}" \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars "FIREBASE_PROJECT_ID=${PROJECT_ID},FIREBASE_STORAGE_BUCKET=${PROJECT_ID}.appspot.com" \
+  --set-env-vars "FIREBASE_PROJECT_ID=${PROJECT_ID},FIREBASE_STORAGE_BUCKET=${BUCKET}" \
   --cpu 2 --memory 2Gi --concurrency 40 --timeout 300 \
   --session-affinity
