@@ -10,7 +10,11 @@ class CompileError(RuntimeError):
         self.log = log
 
 
-def _stage_sources(workdir: Path, files: dict[str, str]) -> Path:
+def _stage_sources(
+    workdir: Path,
+    files: dict[str, str],
+    assets: dict[str, bytes] | None,
+) -> Path:
     workdir.mkdir(parents=True, exist_ok=True)
     job_dir = workdir / uuid.uuid4().hex
     job_dir.mkdir()
@@ -18,6 +22,11 @@ def _stage_sources(workdir: Path, files: dict[str, str]) -> Path:
         target = job_dir / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+    if assets:
+        for path, data in assets.items():
+            target = job_dir / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
     return job_dir
 
 
@@ -26,14 +35,19 @@ def _read_pdf(job_dir: Path, entry: str) -> bytes | None:
     return pdf_path.read_bytes() if pdf_path.exists() else None
 
 
-async def compile_latex(workdir: Path, files: dict[str, str], entry: str = "main.tex") -> bytes:
+async def compile_latex(
+    workdir: Path,
+    files: dict[str, str],
+    entry: str = "main.tex",
+    assets: dict[str, bytes] | None = None,
+) -> bytes:
     """Run tectonic on the given LaTeX sources and return the PDF bytes.
 
     Each call gets a fresh temp directory under ``workdir`` so concurrent
     requests do not collide. Filesystem ops are offloaded to a worker thread
     so they don't block the event loop.
     """
-    job_dir = await asyncio.to_thread(_stage_sources, workdir, files)
+    job_dir = await asyncio.to_thread(_stage_sources, workdir, files, assets)
     try:
         proc = await asyncio.create_subprocess_exec(
             "tectonic",
