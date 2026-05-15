@@ -15,7 +15,8 @@ IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/api:$(date +%Y%m%d-%H%M%S)
 
 gcloud builds submit backend \
   --tag "${IMAGE}" \
-  --project "${PROJECT_ID}"
+  --project "${PROJECT_ID}" \
+  --default-buckets-behavior=REGIONAL_USER_OWNED_BUCKET
 
 gcloud run deploy "${SERVICE}" \
   --image "${IMAGE}" \

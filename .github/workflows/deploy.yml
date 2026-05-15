@@ -57,8 +57,17 @@ jobs:
         id: build
         working-directory: backend
         run: |
+          # --default-buckets-behavior writes build logs to a user-owned bucket
+          # in this project rather than the Google-managed default bucket. The
+          # default bucket is not readable by service accounts, so `gcloud
+          # builds submit` exits 1 with "This tool can only stream logs if you
+          # are Viewer/Owner of the project" even when the build itself
+          # succeeds. See cloud.google.com/build/docs/securing-builds/store-manage-build-logs.
           IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REPO/api:${GITHUB_SHA::12}"
-          gcloud builds submit --tag "$IMAGE" --project "$GCP_PROJECT_ID"
+          gcloud builds submit \
+            --tag "$IMAGE" \
+            --project "$GCP_PROJECT_ID" \
+            --default-buckets-behavior=REGIONAL_USER_OWNED_BUCKET
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloud Run
