@@ -6,9 +6,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
-type Props = { url: string | null };
+type Props = { url: string | null; downloadName?: string };
 
-export function PdfPreview({ url }: Props) {
+export function PdfPreview({ url, downloadName }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
@@ -53,6 +53,15 @@ export function PdfPreview({ url }: Props) {
         <button onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={page >= pages}>
           ›
         </button>
+        <a
+          href={url}
+          download={downloadName || 'document.pdf'}
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto rounded border px-2 py-0.5 text-xs hover:bg-[var(--muted)]"
+        >
+          Download PDF
+        </a>
       </div>
       <div className="flex-1 overflow-auto bg-neutral-800 p-4">
         <canvas ref={canvasRef} className="mx-auto bg-white shadow" />

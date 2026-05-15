@@ -8,10 +8,12 @@ from pydantic import BaseModel
 from ..auth import CurrentUserDep
 from ..config import get_settings
 from ..firebase import db
-from ..services.storage import upload_pdf
+from ..services.storage import download_asset_bytes, upload_pdf
 from ..services.tectonic import CompileError, compile_latex
 
 router = APIRouter(prefix="/api/projects", tags=["compile"])
+
+DEFAULT_ENTRY = "main.tex"
 
 
 class CompileOut(BaseModel):
@@ -29,12 +31,26 @@ async def compile_project(project_id: str, user: CurrentUserDep) -> CompileOut:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
     files: dict[str, str] = dict(data.get("files") or {})
-    if "main.tex" not in files:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "main.tex is required")
+    entry = str(data.get("entry") or DEFAULT_ENTRY)
+    if entry not in files:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"entry file '{entry}' is missing from project files",
+        )
+
+    asset_meta: dict[str, Any] = dict(data.get("assets") or {})
+    assets: dict[str, bytes] = {}
+    for path in asset_meta:
+        try:
+            assets[path] = download_asset_bytes(project_id, path)
+        except Exception:
+            # missing asset shouldn't kill the compile; tectonic will surface
+            # a "file not found" in its log if the .tex actually references it
+            continue
 
     workdir = Path(get_settings().compile_workdir)
     try:
-        pdf = await compile_latex(workdir, files)
+        pdf = await compile_latex(workdir, files, entry=entry, assets=assets)
     except CompileError as exc:
         return CompileOut(pdfUrl="", log=exc.log)
 
